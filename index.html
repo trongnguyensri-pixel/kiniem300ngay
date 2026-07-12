@@ -555,7 +555,7 @@
 
   <script>
     (function(){
-     "use strict";
+    "use strict";
 
       // ---------- DANH SÁCH FILE MEDIA (ẢNH + VIDEO) ----------
       const mediaList = [
@@ -777,6 +777,21 @@ mediaCaptions[58] = "";
 mediaCaptions[59] = "";
 mediaCaptions[60] = "";
 mediaCaptions[61] = "Yêu emmm <3";
+
+      // ---------- NHỮNG VIDEO KHÔNG TẮT NHẠC ----------
+      // 👉 Liệt kê tên file video mà muốn nhạc nền vẫn tiếp tục phát
+      // (thay vì dừng hẳn khi video chạy)
+      const keepMusicVideos = [
+        "3.mp4",  // ví dụ: video này sẽ giữ nhạc nền
+       "5.mp4",
+        "6.mp4",
+        "9.mp4",
+        "12.mp4",
+      ];
+
+      function shouldKeepMusicForVideo(filename) {
+        return keepMusicVideos.includes(filename);
+      }
 
       // ---------- DOM refs ----------
       const loadingScreen = document.getElementById('loadingScreen');
@@ -1109,7 +1124,14 @@ mediaCaptions[61] = "Yêu emmm <3";
       }
 
       function handleVideoEnded() {
-        resumeMusic(); // tiếp tục phát nhạc khi video kết thúc
+        // Lấy tên file video từ src
+        const videoSrc = videoElement.src;
+        const videoFilename = videoSrc ? videoSrc.split('/').pop() : '';
+        
+        // Chỉ resume nhạc nếu: slideshow đang phát + video vừa mới kết thúc là video TẮT nhạc
+        if (isPlaying && videoFilename && !shouldKeepMusicForVideo(videoFilename)) {
+          resumeMusic();
+        }
         if (!isTransitioning) goTo(currentIndex + 1);
       }
 
@@ -1125,7 +1147,17 @@ mediaCaptions[61] = "Yêu emmm <3";
         videoElement.removeEventListener('waiting', null);
         
         bufferingIndicator.classList.remove('show');
-        resumeMusic(); // tiếp tục nhạc khi chuyển khỏi video
+        
+        // Lấy tên file video cũ từ src hiện tại
+        const currentVideoSrc = videoElement.src;
+        if (currentVideoSrc && isPlaying) {
+          // Chỉ resume nhạc nếu: slideshow đang phát + video vừa mới dừng là video TẮT nhạc
+          const videoFilename = currentVideoSrc.split('/').pop();
+          if (!shouldKeepMusicForVideo(videoFilename)) {
+            resumeMusic();
+          }
+        }
+        
         clearAutoAdvanceTimer();
       }
 
@@ -1179,7 +1211,11 @@ mediaCaptions[61] = "Yêu emmm <3";
           videoElement.removeEventListener('ended', handleVideoEnded);
           
           activeEl = videoElement;
-          pauseMusic(); // dừng nhạc khi phát video
+          
+          // Chỉ tắt nhạc nếu video này KHÔNG nằm trong danh sách giữ nhạc
+          if (!shouldKeepMusicForVideo(file)) {
+            pauseMusic();
+          }
           
           // Thêm error handler
           videoElement.addEventListener('error', (e) => {
