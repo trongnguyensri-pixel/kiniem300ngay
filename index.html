@@ -169,6 +169,11 @@
       -webkit-backface-visibility: hidden;
       will-change: transform, opacity, filter;
       display: none;
+      background: #000;
+    }
+    
+    #imageContainer video {
+      background: #0a0a0a;
     }
     /* ---------- BUFFERING INDICATOR ---------- */
     #bufferingIndicator {
@@ -550,7 +555,7 @@
 
   <script>
     (function(){
-      "use strict";
+     "use strict";
 
       // ---------- DANH SÁCH FILE MEDIA (ẢNH + VIDEO) ----------
       const mediaList = [
@@ -772,9 +777,7 @@ mediaCaptions[58] = "";
 mediaCaptions[59] = "";
 mediaCaptions[60] = "";
 mediaCaptions[61] = "Yêu emmm <3";
-      
-      
-     
+
       // ---------- DOM refs ----------
       const loadingScreen = document.getElementById('loadingScreen');
       const heartLoader = document.getElementById('heartLoader');
@@ -806,7 +809,6 @@ mediaCaptions[61] = "Yêu emmm <3";
       let typeTimer = null;
       let autoAdvanceTimeout = null;
       let diaryOpened = false;
-      let volumeFadeRAF = null;
       let currentMusicIndex = 0;
       let captionTypeTimer = null;
       let wakeLock = null;
@@ -1006,24 +1008,27 @@ mediaCaptions[61] = "Yêu emmm <3";
         playCurrentMusic();
       });
 
-      // ---------- ÂM LƯỢNG NHẠC NỀN ----------
-      function fadeMusicVolume(target, duration) {
-        if (volumeFadeRAF) cancelAnimationFrame(volumeFadeRAF);
-        const start = bgMusic.volume;
-        const startTime = performance.now();
-        function step(now) {
-          const t = Math.min(1, (now - startTime) / duration);
-          bgMusic.volume = start + (target - start) * t;
-          if (t < 1) {
-            volumeFadeRAF = requestAnimationFrame(step);
-          } else {
-            volumeFadeRAF = null;
-          }
+      // ---------- DỪNG / TIẾP TỤC NHẠC ----------
+      function pauseMusic() {
+        if (!bgMusic.paused) {
+          bgMusic.pause();
         }
-        volumeFadeRAF = requestAnimationFrame(step);
       }
-      function duckMusic() { fadeMusicVolume(duckedVolume, volumeFadeMs); }
-      function restoreMusic() { fadeMusicVolume(normalVolume, volumeFadeMs); }
+
+      function resumeMusic() {
+        if (bgMusic.paused) {
+          bgMusic.play().catch(() => {});
+        }
+      }
+
+      // Mờ dần âm lượng nhạc (không dùng nữa - sử dụng pause/resume thay vì)
+      // function fadeMusicVolume(target, duration) {
+      //   ...
+      // }
+      // function duckMusic() { fadeMusicVolume(duckedVolume, volumeFadeMs); }
+      // function restoreMusic() { fadeMusicVolume(normalVolume, volumeFadeMs); }
+
+
 
       // ---------- PHÁT / TẠM DỪNG ----------
       function togglePlay() {
@@ -1036,14 +1041,14 @@ mediaCaptions[61] = "Yêu emmm <3";
         isPlaying = false;
         clearAutoAdvanceTimer();
         if (!videoElement.paused) videoElement.pause();
-        bgMusic.pause();
+        pauseMusic(); // dừng nhạc khi tạm dừng slideshow
         updatePlayIcon();
       }
 
       function resumeSlideshow() {
         if (isPlaying) return;
         isPlaying = true;
-        bgMusic.play().catch(() => {});
+        resumeMusic(); // tiếp tục nhạc khi resume slideshow
         const file = mediaList[currentIndex];
         if (isVideoFile(file)) {
           attemptPlayVideo();
@@ -1104,7 +1109,7 @@ mediaCaptions[61] = "Yêu emmm <3";
       }
 
       function handleVideoEnded() {
-        restoreMusic();
+        resumeMusic(); // tiếp tục phát nhạc khi video kết thúc
         if (!isTransitioning) goTo(currentIndex + 1);
       }
 
@@ -1112,8 +1117,15 @@ mediaCaptions[61] = "Yêu emmm <3";
         if (!videoElement.paused) {
           videoElement.pause();
         }
+        // Clear all video listeners
         videoElement.removeEventListener('ended', handleVideoEnded);
-        restoreMusic();
+        videoElement.removeEventListener('error', null);
+        videoElement.removeEventListener('canplay', null);
+        videoElement.removeEventListener('play', null);
+        videoElement.removeEventListener('waiting', null);
+        
+        bufferingIndicator.classList.remove('show');
+        resumeMusic(); // tiếp tục nhạc khi chuyển khỏi video
         clearAutoAdvanceTimer();
       }
 
@@ -1141,6 +1153,7 @@ mediaCaptions[61] = "Yêu emmm <3";
         if (type === 'image') {
           videoElement.style.display = 'none';
           videoElement.removeAttribute('src');
+          videoElement.pause();
           imgElement.style.display = 'block';
           imgElement.src = file;
           imgElement.className = effect;
@@ -1148,14 +1161,55 @@ mediaCaptions[61] = "Yêu emmm <3";
           scheduleNextForImage();
         } else {
           imgElement.style.display = 'none';
+          
+          // Setup video attributes
           videoElement.style.display = 'block';
           videoElement.className = effect;
+          videoElement.preload = 'auto';
+          videoElement.controls = false;
+          videoElement.playsInline = true;
+          videoElement.setAttribute('webkit-playsinline', 'webkit-playsinline');
+          videoElement.setAttribute('playsinline', 'playsinline');
+          
+          // Set video source
           videoElement.src = file;
           videoElement.currentTime = 0;
+          
+          // Clear old ended listener
+          videoElement.removeEventListener('ended', handleVideoEnded);
+          
           activeEl = videoElement;
-          duckMusic();
-          if (isPlaying) attemptPlayVideo();
+          pauseMusic(); // dừng nhạc khi phát video
+          
+          // Thêm error handler
+          videoElement.addEventListener('error', (e) => {
+            console.error('Video error:', e);
+            bufferingIndicator.classList.remove('show');
+            // chuyển tiếp nếu video lỗi
+            setTimeout(() => { if (!isTransitioning) goTo(currentIndex + 1); }, 1000);
+          }, { once: true });
+          
+          // Thêm canplay handler để ẩn buffering
+          videoElement.addEventListener('canplay', () => {
+            bufferingIndicator.classList.remove('show');
+          }, { once: true });
+          
+          // Thêm play handler
+          videoElement.addEventListener('play', () => {
+            bufferingIndicator.classList.remove('show');
+          }, { once: true });
+          
+          // Thêm waiting handler để hiện buffering
+          videoElement.addEventListener('waiting', () => {
+            bufferingIndicator.classList.add('show');
+          });
+          
+          // Add ended listener
           videoElement.addEventListener('ended', handleVideoEnded, { once: true });
+          
+          if (isPlaying) {
+            attemptPlayVideo();
+          }
         }
 
         updateThumbActive(newIndex);
