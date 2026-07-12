@@ -143,7 +143,7 @@
     #slideshow.show {
       opacity: 1;
     }
-    /* ---------- IMAGE CONTAINER ---------- */
+    /* ---------- IMAGE / VIDEO CONTAINER ---------- */
     #imageContainer {
       position: relative;
       width: 94vw;
@@ -158,7 +158,8 @@
       align-items: center;
       justify-content: center;
     }
-    #imageContainer img {
+    #imageContainer img,
+    #imageContainer video {
       position: absolute;
       width: 100%;
       height: 100%;
@@ -167,7 +168,7 @@
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
       will-change: transform, opacity, filter;
-      image-rendering: auto;
+      display: none;
     }
     /* ---------- IMAGE TITLE / CAPTION (đánh chữ) ---------- */
     #imageTitle {
@@ -204,6 +205,11 @@
     }
     @keyframes blinkCursor {
       50% { opacity: 0; }
+    }
+    #staticCaptionText.typing-static::after {
+      content: '|';
+      margin-left: 2px;
+      animation: blinkCursor 0.8s steps(1) infinite;
     }
     /* ---------- STATIC CORNER CAPTION (bạn tự viết) ---------- */
     #staticCaption {
@@ -245,7 +251,7 @@
     #thumbnailStrip::-webkit-scrollbar {
       display: none;
     }
-    /* Thanh thumbnail chỉ hiện ra sau khi đã xem hết toàn bộ ảnh (đến ảnh cuối cùng) */
+    /* Thanh thumbnail chỉ hiện ra sau khi đã xem hết toàn bộ media (đến file cuối cùng) */
     #thumbnailStrip.visible {
       opacity: 1;
       pointer-events: auto;
@@ -269,13 +275,25 @@
       box-shadow: 0 0 20px rgba(255,77,109,0.4);
       transform: scale(1.02);
     }
-    .thumb-item img {
+    .thumb-item img,
+    .thumb-item video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
     }
-    /* ---------- COUNTER (ẩn cho đến khi xem xong ảnh cuối) ---------- */
+    .thumb-play-icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: #fff;
+      background: rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+    /* ---------- COUNTER (ẩn cho đến khi xem xong file cuối) ---------- */
     #counter {
       position: absolute;
       top: 20px;
@@ -298,7 +316,7 @@
     #counter.visible {
       opacity: 1;
     }
-    /* ---------- GLASS CONTROLS (ẩn cho đến khi xem xong ảnh cuối) ---------- */
+    /* ---------- GLASS CONTROLS (ẩn cho đến khi xem xong file cuối) ---------- */
     #controls {
       position: fixed;
       bottom: 30px;
@@ -421,7 +439,7 @@
         height: 34px;
       }
     }
-    /* ---------- ANIMATIONS (hiệu ứng chuyển ảnh) ---------- */
+    /* ---------- ANIMATIONS (hiệu ứng chuyển ảnh/video) ---------- */
     .anim-fade { animation: fadeAnim 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
     .anim-zoomIn { animation: zoomIn 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
     .anim-zoomOut { animation: zoomOut 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
@@ -478,19 +496,20 @@
   <!-- SLIDESHOW -->
   <div id="slideshow">
     <div id="imageContainer">
-      <img id="currentImage" src="" alt="slideshow">
+      <img id="currentImage" alt="slideshow">
+      <video id="currentVideo" playsinline webkit-playsinline></video>
       <div id="imageTitle"></div>
       <div id="counter">0 / 0</div>
     </div>
     <div id="thumbnailStrip"></div>
   </div>
 
-  <!-- CAPTION GÓC PHẢI BÊN DƯỚI - bạn tự viết nội dung tại đây -->
+  <!-- CAPTION GÓC PHẢI BÊN DƯỚI - nội dung được đánh chữ tự động khi mở nhật ký -->
   <div id="staticCaption">
-    Viết caption của bạn ở đây
+    <span id="staticCaptionText"></span>
   </div>
 
-  <!-- CONTROLS (ẩn cho đến khi xem đến ảnh cuối cùng) -->
+  <!-- CONTROLS (ẩn cho đến khi xem đến file cuối cùng) -->
   <div id="controls">
     <button id="prevBtn" aria-label="Previous">◀</button>
     <button id="playBtn" aria-label="Play/Pause">⏸</button>
@@ -501,20 +520,39 @@
     (function(){
       "use strict";
 
-      // ---------- CẤU HÌNH ----------
-      const totalImages = 50;          // 👈 thay đổi số ảnh tại đây
-      const imageExtension = 'jpg';
-      const typingSpeedMs = 45;        // tốc độ đánh chữ của tiêu đề (ms/ký tự)
+      // ---------- DANH SÁCH FILE (ẢNH + VIDEO) THEO ĐÚNG THỨ TỰ BẠN MUỐN CHIẾU ----------
+      // 👉 QUAN TRỌNG: Trình duyệt không thể tự đọc danh sách file trong thư mục,
+      // nên bạn cần liệt kê TÊN FILE ĐẦY ĐỦ (cả đuôi .jpg/.png/.mp4...) theo đúng
+      // thứ tự muốn chiếu. Loại file (ảnh hay video) được tự nhận diện qua đuôi file.
+      const mediaList = [
+        "1.jpg",
+        "2.jpg",
+        "3.mp4",
+        "4.jpg",
+        "5.jpg",
+        // 👉 thêm toàn bộ file còn lại của bạn vào đây theo đúng thứ tự...
+      ];
 
-      // ---------- TIÊU ĐỀ CHO TỪNG ẢNH ----------
-      // 👉 Bạn tự cập nhật tiêu đề/kỷ niệm cho từng ảnh tại đây.
-      // Mảng này có index từ 0, tương ứng ảnh 1.jpg = imageTitles[0], 2.jpg = imageTitles[1], v.v...
-      // Để trống "" nếu ảnh đó chưa muốn có tiêu đề (ô tiêu đề sẽ tự ẩn đi).
-      const imageTitles = Array.from({ length: totalImages }, () => "");
+      // Các đuôi được coi là video, còn lại mặc định là ảnh (jpg, png, ... đều tự nhận là ảnh)
+      const videoExtensions = ['mp4', 'webm', 'mov', 'm4v', 'ogg'];
+
+      // 👉 Bạn tự viết caption cố định (góc phải dưới) của mình tại đây.
+      // Nó sẽ tự "đánh chữ" xuất hiện ngay khi bạn bấm "MỞ NHẬT KÝ".
+      const staticCaptionText = "Viết caption của bạn ở đây";
+
+      const imageDurationMs = 7000;   // ảnh hiện trong 7 giây
+      const typingSpeedMs = 45;       // tốc độ đánh chữ của tiêu đề (ms/ký tự)
+      const duckedVolume = 0.4;       // âm lượng nhạc nền khi video đang chạy (40%)
+      const normalVolume = 1.0;       // âm lượng nhạc nền bình thường (100%)
+      const volumeFadeMs = 400;       // thời gian mờ dần khi đổi âm lượng
+
+      // ---------- TIÊU ĐỀ CHO TỪNG FILE ----------
+      // 👉 Bạn tự cập nhật tiêu đề/kỷ niệm cho từng ảnh HOẶC video tại đây.
+      // Index tương ứng đúng với vị trí file trong mảng mediaList ở trên.
+      const mediaTitles = Array.from({ length: mediaList.length }, () => "");
       // Ví dụ cách điền:
-      // imageTitles[0] = "Lần đầu mình gặp nhau";
-      // imageTitles[1] = "Chuyến đi Đà Lạt";
-      // imageTitles[49] = "Kỷ niệm gần đây nhất";
+      // mediaTitles[0] = "Lần đầu mình gặp nhau";
+      // mediaTitles[2] = "Đoạn video kỷ niệm ở Đà Lạt";
 
       // ---------- DOM refs ----------
       const loadingScreen = document.getElementById('loadingScreen');
@@ -526,7 +564,9 @@
       const bgMusic = document.getElementById('bgMusic');
       const slideshow = document.getElementById('slideshow');
       const imgElement = document.getElementById('currentImage');
+      const videoElement = document.getElementById('currentVideo');
       const titleElement = document.getElementById('imageTitle');
+      const staticCaptionTextEl = document.getElementById('staticCaptionText');
       const counter = document.getElementById('counter');
       const thumbStrip = document.getElementById('thumbnailStrip');
       const controls = document.getElementById('controls');
@@ -535,16 +575,16 @@
       const playBtn = document.getElementById('playBtn');
 
       // ---------- STATE ----------
+      const totalMedia = mediaList.length;
       let currentIndex = 0;
       let isPlaying = true;
-      let timer = null;
       let isTransitioning = false;
-      let imageCache = [];
-      let hasReachedEnd = false; // đã xem đến ảnh cuối cùng chưa
-      let typeTimer = null;      // timer cho hiệu ứng đánh chữ
+      let hasReachedEnd = false;
+      let typeTimer = null;
+      let autoAdvanceTimeout = null;
       let diaryOpened = false;
+      let volumeFadeRAF = null;
 
-      // hiệu ứng có sẵn
       const effectList = [
         'anim-fade','anim-zoomIn','anim-zoomOut','anim-kenBurns','anim-scale',
         'anim-slideLeft','anim-slideRight','anim-slideUp','anim-slideDown',
@@ -552,25 +592,22 @@
         'anim-flip','anim-cube','anim-ripple','anim-dissolve'
       ];
 
+      function isVideoFile(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        return videoExtensions.includes(ext);
+      }
+
       // ---------- KHỞI TẠO ----------
       function init() {
-        // Tạo danh sách ảnh
-        const imagePaths = [];
-        for (let i = 1; i <= totalImages; i++) {
-          imagePaths.push(`${i}.${imageExtension}`);
-        }
-
         let loadedCount = 0;
-        const total = imagePaths.length;
 
-        function onImageLoaded() {
+        function onMediaLoaded() {
           loadedCount++;
-          const progress = Math.min(100, (loadedCount / total) * 100);
+          const progress = Math.min(100, (loadedCount / totalMedia) * 100);
           progressFill.style.width = progress + '%';
-          loadingText.textContent = `Đang tải kỷ niệm... ${loadedCount}/${total}`;
+          loadingText.textContent = `Đang tải kỷ niệm... ${loadedCount}/${totalMedia}`;
 
-          if (loadedCount >= total) {
-            // Tất cả ảnh đã tải xong -> ẩn loader, hiện nút "MỞ NHẬT KÝ"
+          if (loadedCount >= totalMedia) {
             setTimeout(() => {
               heartLoader.style.opacity = '0';
               progressBar.style.opacity = '0';
@@ -581,33 +618,52 @@
           }
         }
 
-        // Tải tất cả ảnh vào cache
-        for (let i = 0; i < total; i++) {
-          const src = imagePaths[i];
-          const img = new Image();
-          img.onload = () => {
-            imageCache[i] = img;
-            onImageLoaded();
-          };
-          img.onerror = () => {
-            imageCache[i] = null;
-            onImageLoaded();
-          };
-          img.src = src;
-        }
+        // Tải trước tất cả ảnh + video
+        mediaList.forEach((file) => {
+          if (isVideoFile(file)) {
+            const v = document.createElement('video');
+            v.preload = 'auto';
+            v.muted = true;
+            v.src = file;
+            v.addEventListener('loadeddata', onMediaLoaded, { once: true });
+            v.addEventListener('error', onMediaLoaded, { once: true });
+            v.load();
+          } else {
+            const img = new Image();
+            img.onload = onMediaLoaded;
+            img.onerror = onMediaLoaded;
+            img.src = file;
+          }
+        });
 
-        // Tạo thumbnails (sử dụng ảnh đã tải)
-        for (let i = 0; i < total; i++) {
+        // Tạo thumbnails
+        mediaList.forEach((file, i) => {
           const thumbDiv = document.createElement('div');
           thumbDiv.className = 'thumb-item';
           thumbDiv.dataset.index = i;
 
-          const thumbImg = document.createElement('img');
-          thumbImg.src = `${i+1}.${imageExtension}`;
-          thumbImg.alt = `Thumb ${i+1}`;
-          thumbImg.loading = 'lazy';
+          if (isVideoFile(file)) {
+            const thumbVideo = document.createElement('video');
+            thumbVideo.src = file;
+            thumbVideo.muted = true;
+            thumbVideo.preload = 'metadata';
+            thumbVideo.playsInline = true;
+            thumbVideo.addEventListener('loadedmetadata', () => {
+              try { thumbVideo.currentTime = Math.min(0.1, (thumbVideo.duration || 0.2) / 2); } catch (e) {}
+            });
+            thumbDiv.appendChild(thumbVideo);
+            const playIcon = document.createElement('div');
+            playIcon.className = 'thumb-play-icon';
+            playIcon.textContent = '▶';
+            thumbDiv.appendChild(playIcon);
+          } else {
+            const thumbImg = document.createElement('img');
+            thumbImg.src = file;
+            thumbImg.alt = `Thumb ${i+1}`;
+            thumbImg.loading = 'lazy';
+            thumbDiv.appendChild(thumbImg);
+          }
 
-          thumbDiv.appendChild(thumbImg);
           thumbDiv.addEventListener('click', (e) => {
             e.stopPropagation();
             const idx = parseInt(thumbDiv.dataset.index, 10);
@@ -616,17 +672,15 @@
             }
           });
           thumbStrip.appendChild(thumbDiv);
-        }
+        });
 
-        // ----- nút "MỞ NHẬT KÝ" -----
         openDiaryBtn.addEventListener('click', openDiary);
 
-        // ----- controls -----
         prevBtn.addEventListener('click', () => { if (!isTransitioning) goTo(currentIndex - 1); });
         nextBtn.addEventListener('click', () => { if (!isTransitioning) goTo(currentIndex + 1); });
         playBtn.addEventListener('click', togglePlay);
 
-        // keyboard (chỉ hoạt động sau khi đã xem đến ảnh cuối, giống như thanh điều khiển)
+        // phím tắt (chỉ hoạt động sau khi đã xem đến file cuối, giống như thanh điều khiển)
         document.addEventListener('keydown', (e) => {
           if (!hasReachedEnd) return;
           if (e.target.tagName === 'INPUT') return;
@@ -635,7 +689,6 @@
           else if (e.key === ' ' || e.key === 'Space') { e.preventDefault(); togglePlay(); }
         });
 
-        // pause on hover (chỉ khi đã hiện thanh điều khiển)
         const container = document.getElementById('imageContainer');
         container.addEventListener('mouseenter', () => { if (hasReachedEnd && isPlaying) pauseSlideshow(); });
         container.addEventListener('mouseleave', () => { if (hasReachedEnd && !isPlaying) resumeSlideshow(); });
@@ -649,33 +702,49 @@
         loadingScreen.classList.add('hide');
         slideshow.classList.add('show');
 
-        // Set ảnh đầu tiên
-        if (imageCache[0]) {
-          imgElement.src = imageCache[0].src;
-        } else {
-          imgElement.src = `1.${imageExtension}`;
-        }
-        updateThumbActive(0);
-        updateCounter(0);
-        updateTitle(0);
-        checkEndReached(0);
-        startSlideshow();
-
-        // Bắt đầu nhạc nền (cần cử chỉ người dùng để trình duyệt cho phép phát)
-        bgMusic.volume = 0.6;
+        bgMusic.volume = normalVolume;
         bgMusic.play().catch(() => { /* trình duyệt chặn autoplay, bỏ qua im lặng */ });
+
+        typeStaticCaption();
+        transitionTo(0);
       }
 
-      // ---------- ĐIỀU KHIỂN SLIDESHOW ----------
-      function startSlideshow() {
-        if (timer) clearInterval(timer);
-        timer = setInterval(() => {
-          if (isPlaying && !isTransitioning) {
-            goTo(currentIndex + 1);
+      // Hiệu ứng đánh chữ cho caption cố định góc phải dưới, chạy một lần khi mở nhật ký
+      function typeStaticCaption() {
+        if (!staticCaptionText) return;
+        staticCaptionTextEl.textContent = '';
+        staticCaptionTextEl.classList.add('typing-static');
+        let i = 0;
+        const timer = setInterval(() => {
+          i++;
+          staticCaptionTextEl.textContent = staticCaptionText.slice(0, i);
+          if (i >= staticCaptionText.length) {
+            clearInterval(timer);
+            staticCaptionTextEl.classList.remove('typing-static');
           }
-        }, 5000);
+        }, typingSpeedMs);
       }
 
+      // ---------- ÂM LƯỢNG NHẠC NỀN (mờ dần) ----------
+      function fadeMusicVolume(target, duration) {
+        if (volumeFadeRAF) cancelAnimationFrame(volumeFadeRAF);
+        const start = bgMusic.volume;
+        const startTime = performance.now();
+        function step(now) {
+          const t = Math.min(1, (now - startTime) / duration);
+          bgMusic.volume = start + (target - start) * t;
+          if (t < 1) {
+            volumeFadeRAF = requestAnimationFrame(step);
+          } else {
+            volumeFadeRAF = null;
+          }
+        }
+        volumeFadeRAF = requestAnimationFrame(step);
+      }
+      function duckMusic() { fadeMusicVolume(duckedVolume, volumeFadeMs); }
+      function restoreMusic() { fadeMusicVolume(normalVolume, volumeFadeMs); }
+
+      // ---------- PHÁT / TẠM DỪNG ----------
       function togglePlay() {
         if (isPlaying) pauseSlideshow();
         else resumeSlideshow();
@@ -684,19 +753,19 @@
 
       function pauseSlideshow() {
         isPlaying = false;
-        if (timer) { clearInterval(timer); timer = null; }
+        clearAutoAdvanceTimer();
+        if (!videoElement.paused) videoElement.pause();
         updatePlayIcon();
       }
 
       function resumeSlideshow() {
         if (isPlaying) return;
         isPlaying = true;
-        if (!timer) {
-          timer = setInterval(() => {
-            if (isPlaying && !isTransitioning) {
-              goTo(currentIndex + 1);
-            }
-          }, 5000);
+        const file = mediaList[currentIndex];
+        if (isVideoFile(file)) {
+          attemptPlayVideo();
+        } else {
+          scheduleNextForImage();
         }
         updatePlayIcon();
       }
@@ -705,40 +774,85 @@
         playBtn.textContent = isPlaying ? '⏸' : '▶';
       }
 
-      // ---------- CHUYỂN ẢNH ----------
-      function goTo(index) {
-        const total = totalImages;
-        let newIndex = index;
-        if (newIndex < 0) newIndex = total - 1;
-        else if (newIndex >= total) newIndex = 0;
-        if (newIndex === currentIndex) return;
-        if (isTransitioning) return;
-
-        if (!imageCache[newIndex]) {
-          const tryImg = new Image();
-          tryImg.onload = () => {
-            imageCache[newIndex] = tryImg;
-            performTransition(newIndex);
-          };
-          tryImg.onerror = () => {
-            performTransition(newIndex);
-          };
-          tryImg.src = `${newIndex+1}.${imageExtension}`;
-          return;
-        }
-        performTransition(newIndex);
+      function clearAutoAdvanceTimer() {
+        if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
       }
 
-      function performTransition(newIndex) {
+      function scheduleNextForImage() {
+        clearAutoAdvanceTimer();
+        if (!isPlaying) return;
+        autoAdvanceTimeout = setTimeout(() => {
+          if (!isTransitioning) goTo(currentIndex + 1);
+        }, imageDurationMs);
+      }
+
+      function attemptPlayVideo() {
+        videoElement.muted = false;
+        const p = videoElement.play();
+        if (p && p.catch) {
+          p.catch(() => {
+            // một số trình duyệt chặn phát có tiếng nếu không phải từ thao tác trực tiếp của người dùng
+            videoElement.muted = true;
+            videoElement.play().catch(() => {});
+          });
+        }
+      }
+
+      function handleVideoEnded() {
+        restoreMusic();
+        if (!isTransitioning) goTo(currentIndex + 1);
+      }
+
+      // dừng hẳn video hiện tại + khôi phục âm lượng nhạc nền + hủy timer ảnh (dùng khi chuyển file)
+      function stopCurrentMedia() {
+        if (!videoElement.paused) {
+          videoElement.pause();
+        }
+        videoElement.removeEventListener('ended', handleVideoEnded);
+        restoreMusic();
+        clearAutoAdvanceTimer();
+      }
+
+      // ---------- CHUYỂN FILE ----------
+      function goTo(index) {
+        let newIndex = index;
+        if (newIndex < 0) newIndex = totalMedia - 1;
+        else if (newIndex >= totalMedia) newIndex = 0;
+        if (newIndex === currentIndex && diaryOpened) return;
+        if (isTransitioning) return;
+        transitionTo(newIndex);
+      }
+
+      function transitionTo(newIndex) {
         isTransitioning = true;
         currentIndex = newIndex;
 
+        stopCurrentMedia();
+
+        const file = mediaList[newIndex];
+        const type = isVideoFile(file) ? 'video' : 'image';
         const effect = effectList[Math.floor(Math.random() * effectList.length)];
+        let activeEl;
 
-        const newSrc = imageCache[newIndex] ? imageCache[newIndex].src : `${newIndex+1}.${imageExtension}`;
-        imgElement.src = newSrc;
-
-        imgElement.className = effect;
+        if (type === 'image') {
+          videoElement.style.display = 'none';
+          videoElement.removeAttribute('src');
+          imgElement.style.display = 'block';
+          imgElement.src = file;
+          imgElement.className = effect;
+          activeEl = imgElement;
+          scheduleNextForImage();
+        } else {
+          imgElement.style.display = 'none';
+          videoElement.style.display = 'block';
+          videoElement.className = effect;
+          videoElement.src = file;
+          videoElement.currentTime = 0;
+          activeEl = videoElement;
+          duckMusic();
+          if (isPlaying) attemptPlayVideo();
+          videoElement.addEventListener('ended', handleVideoEnded, { once: true });
+        }
 
         updateThumbActive(newIndex);
         updateCounter(newIndex);
@@ -746,13 +860,13 @@
         checkEndReached(newIndex);
 
         const onFinish = () => {
-          imgElement.className = '';
+          activeEl.className = '';
           isTransitioning = false;
         };
-        imgElement.addEventListener('animationend', onFinish, { once: true });
+        activeEl.addEventListener('animationend', onFinish, { once: true });
         setTimeout(() => {
           if (isTransitioning) {
-            imgElement.className = '';
+            activeEl.className = '';
             isTransitioning = false;
           }
         }, 2000);
@@ -760,12 +874,12 @@
 
       // ---------- UI UPDATE ----------
       function updateCounter(index) {
-        counter.textContent = `${index+1} / ${totalImages}`;
+        counter.textContent = `${index+1} / ${totalMedia}`;
       }
 
-      // Hiệu ứng đánh chữ (typewriter) cho tiêu đề mỗi ảnh
+      // Hiệu ứng đánh chữ (typewriter) cho tiêu đề mỗi ảnh/video
       function updateTitle(index) {
-        const text = imageTitles[index] || '';
+        const text = mediaTitles[index] || '';
 
         if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
         titleElement.classList.remove('typing');
@@ -791,10 +905,10 @@
         }, typingSpeedMs);
       }
 
-      // Thanh điều khiển, số thứ tự ảnh và thanh thumbnail chỉ hiện ra khi đã xem
-      // đến ảnh cuối cùng, sau đó sẽ luôn hiển thị để có thể tua lại xem từng khoảnh khắc.
+      // Thanh điều khiển, số thứ tự và thanh thumbnail chỉ hiện ra khi đã xem
+      // đến file cuối cùng, sau đó sẽ luôn hiển thị để có thể tua lại xem từng khoảnh khắc.
       function checkEndReached(index) {
-        if (!hasReachedEnd && index === totalImages - 1) {
+        if (!hasReachedEnd && index === totalMedia - 1) {
           hasReachedEnd = true;
           thumbStrip.classList.add('visible');
           counter.classList.add('visible');
