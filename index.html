@@ -1082,10 +1082,12 @@ mediaCaptions[64] = "Yêu emmm <3";
         }, imageDurationMs);
       }
 
-      function attemptPlayVideo() {
+      function attemptPlayVideo(shouldUnmute = false) {
         try {
           videoElement.load(); // reload video trước
-          videoElement.muted = true; // luôn muted để tránh autoplay policy
+          // ✅ Nếu video trong keepMusicVideos → unmute (để video có âm thanh)
+          // Nếu video không trong keepMusicVideos → mute (Chrome autoplay policy)
+          videoElement.muted = !shouldUnmute;
           
           // đợi metadata load trước khi play
           if (videoElement.readyState >= 1) { // metadata đã load
@@ -1102,7 +1104,7 @@ mediaCaptions[64] = "Yêu emmm <3";
               const p = videoElement.play();
               if (p && typeof p.catch === 'function') {
                 p.catch(() => {
-                  console.log('Muted play also failed');
+                  console.log('Video play failed');
                 });
               }
             };
@@ -1114,6 +1116,12 @@ mediaCaptions[64] = "Yêu emmm <3";
       }
 
       function handleVideoEnded() {
+        // 🎵 Nếu video vừa mới kết thúc là loại TẮT NHẠC, thì resume nhạc ngay
+        const currentFile = mediaList[currentIndex];
+        if (currentFile && !shouldKeepMusicForVideo(currentFile) && isPlaying) {
+          resumeMusic();
+        }
+        
         if (!isTransitioning) goTo(currentIndex + 1);
       }
 
@@ -1229,7 +1237,10 @@ mediaCaptions[64] = "Yêu emmm <3";
           videoElement.addEventListener('ended', handleVideoEnded, { once: true });
           
           if (isPlaying) {
-            attemptPlayVideo();
+            // ✅ Nếu video trong keepMusicVideos → unmute (để video có âm thanh)
+            // Nếu video không trong keepMusicVideos → mute (Chrome autoplay policy)
+            const shouldUnmute = shouldKeepMusicForVideo(file);
+            attemptPlayVideo(shouldUnmute);
           }
         }
 
