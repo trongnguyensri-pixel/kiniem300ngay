@@ -170,7 +170,7 @@
       will-change: transform, opacity, filter;
       display: none;
     }
-    /* ---------- BUFFERING INDICATOR (khi phát tới file chưa tải xong) ---------- */
+    /* ---------- BUFFERING INDICATOR ---------- */
     #bufferingIndicator {
       position: absolute;
       inset: 0;
@@ -195,7 +195,7 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    /* ---------- IMAGE TITLE / CAPTION (đánh chữ) ---------- */
+    /* ---------- IMAGE TITLE / CAPTION ---------- */
     #imageTitle {
       position: absolute;
       left: 50%;
@@ -231,27 +231,31 @@
     @keyframes blinkCursor {
       50% { opacity: 0; }
     }
-    #staticCaptionText.typing-static::after {
-      content: '|';
-      margin-left: 2px;
-      animation: blinkCursor 0.8s steps(1) infinite;
-    }
-    /* ---------- STATIC CORNER CAPTION (bạn tự viết) ---------- */
-    #staticCaption {
+    /* ---------- IMAGE CAPTION (caption riêng cho mỗi ảnh) ---------- */
+    #imageCaption {
       position: fixed;
       bottom: 18px;
       right: 24px;
       max-width: 40vw;
-      font-size: 0.85rem;
-      font-style: italic;
+      font-size: 0.9rem;
       font-weight: 300;
       letter-spacing: 0.3px;
       text-align: right;
-      color: rgba(255,255,255,0.55);
+      color: rgba(255,255,255,0.7);
       text-shadow: 0 2px 10px rgba(0,0,0,0.6);
       z-index: 30;
       pointer-events: none;
-      line-height: 1.4;
+      line-height: 1.5;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    #imageCaption.show {
+      opacity: 1;
+    }
+    #imageCaptionText.typing::after {
+      content: '|';
+      margin-left: 2px;
+      animation: blinkCursor 0.8s steps(1) infinite;
     }
     /* ---------- THUMBNAIL STRIP ---------- */
     #thumbnailStrip {
@@ -276,7 +280,6 @@
     #thumbnailStrip::-webkit-scrollbar {
       display: none;
     }
-    /* Thanh thumbnail chỉ hiện ra sau khi đã xem hết toàn bộ media (đến file cuối cùng) */
     #thumbnailStrip.visible {
       opacity: 1;
       pointer-events: auto;
@@ -318,7 +321,7 @@
       background: rgba(0,0,0,0.25);
       pointer-events: none;
     }
-    /* ---------- COUNTER (ẩn cho đến khi xem xong file cuối) ---------- */
+    /* ---------- COUNTER ---------- */
     #counter {
       position: absolute;
       top: 20px;
@@ -341,7 +344,7 @@
     #counter.visible {
       opacity: 1;
     }
-    /* ---------- GLASS CONTROLS (ẩn cho đến khi xem xong file cuối) ---------- */
+    /* ---------- GLASS CONTROLS ---------- */
     #controls {
       position: fixed;
       bottom: 30px;
@@ -442,8 +445,8 @@
         padding: 6px 16px;
         bottom: 14px;
       }
-      #staticCaption {
-        font-size: 0.7rem;
+      #imageCaption {
+        font-size: 0.75rem;
         max-width: 55vw;
         bottom: 12px;
         right: 14px;
@@ -464,7 +467,7 @@
         height: 34px;
       }
     }
-    /* ---------- ANIMATIONS (hiệu ứng chuyển ảnh/video) ---------- */
+    /* ---------- ANIMATIONS ---------- */
     .anim-fade { animation: fadeAnim 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
     .anim-zoomIn { animation: zoomIn 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
     .anim-zoomOut { animation: zoomOut 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
@@ -504,8 +507,11 @@
 </head>
 <body>
 
-  <!-- NHẠC NỀN -->
-  <audio id="bgMusic" src="song.mp3" loop preload="auto"></audio>
+  <!-- PLAYLIST NHẠC NỀN -->
+  <audio id="bgMusic" playsinline webkit-playsinline></audio>
+
+  <!-- Video dummy để preload (fix lỗi video không hiển thị) -->
+  <video id="preloadVideo" style="display:none;" playsinline webkit-playsinline muted></video>
 
   <!-- LOADING -->
   <div id="loadingScreen">
@@ -530,12 +536,12 @@
     <div id="thumbnailStrip"></div>
   </div>
 
-  <!-- CAPTION GÓC PHẢI BÊN DƯỚI - nội dung được đánh chữ tự động khi mở nhật ký -->
-  <div id="staticCaption">
-    <span id="staticCaptionText"></span>
+  <!-- CAPTION CHO TỪNG ẢNH (góc phải dưới) -->
+  <div id="imageCaption">
+    <span id="imageCaptionText"></span>
   </div>
 
-  <!-- CONTROLS (ẩn cho đến khi xem đến file cuối cùng) -->
+  <!-- CONTROLS -->
   <div id="controls">
     <button id="prevBtn" aria-label="Previous">◀</button>
     <button id="playBtn" aria-label="Play/Pause">⏸</button>
@@ -546,12 +552,9 @@
     (function(){
       "use strict";
 
-      // ---------- DANH SÁCH FILE (ẢNH + VIDEO) THEO ĐÚNG THỨ TỰ BẠN MUỐN CHIẾU ----------
-      // 👉 QUAN TRỌNG: Trình duyệt không thể tự đọc danh sách file trong thư mục,
-      // nên bạn cần liệt kê TÊN FILE ĐẦY ĐỦ (cả đuôi .jpg/.png/.mp4...) theo đúng
-      // thứ tự muốn chiếu. Loại file (ảnh hay video) được tự nhận diện qua đuôi file.
+      // ---------- DANH SÁCH FILE MEDIA (ẢNH + VIDEO) ----------
       const mediaList = [
-       "0.JPEG",
+      "0.JPEG",
 "1.PNG",
 "2.PNG",
 "3.mp4",
@@ -615,29 +618,38 @@
 "59.jpeg",
 "60.jpeg",
 "61.jpg"
-        // 👉 thêm toàn bộ file còn lại của bạn vào đây theo đúng thứ tự...
+        // thêm toàn bộ file còn lại của bạn vào đây theo đúng thứ tự...
       ];
 
-      // Các đuôi được coi là video, còn lại mặc định là ảnh (jpg, png, ... đều tự nhận là ảnh)
+      // ---------- PLAYLIST NHẠC NỀN ----------
+      // 👉 Danh sách các file nhạc. Khi phát hết file này, sẽ tự chuyển sang file tiếp theo
+      const musicPlaylist = [
+        "song.mp3",
+        "song2.mp3",
+     
+        // thêm các file nhạc khác nếu cần...
+      ];
+
       const videoExtensions = ['mp4', 'webm', 'mov', 'm4v', 'ogg'];
 
-      // 👉 Bạn tự viết caption cố định (góc phải dưới) của mình tại đây.
-      // Nó sẽ tự "đánh chữ" xuất hiện ngay khi bạn bấm "MỞ NHẬT KÝ".
-      const staticCaptionText = "Viết caption của bạn ở đây";
-
-      const imageDurationMs = 7000;   // ảnh hiện trong 7 giây
-      const typingSpeedMs = 45;       // tốc độ đánh chữ của tiêu đề (ms/ký tự)
-      const duckedVolume = 0.4;       // âm lượng nhạc nền khi video đang chạy (40%)
-      const normalVolume = 1.0;       // âm lượng nhạc nền bình thường (100%)
-      const volumeFadeMs = 400;       // thời gian mờ dần khi đổi âm lượng
+      const imageDurationMs = 7000;
+      const typingSpeedMs = 45;
+      const duckedVolume = 0.4;
+      const normalVolume = 1.0;
+      const volumeFadeMs = 400;
 
       // ---------- TIÊU ĐỀ CHO TỪNG FILE ----------
-      // 👉 Bạn tự cập nhật tiêu đề/kỷ niệm cho từng ảnh HOẶC video tại đây.
-      // Index tương ứng đúng với vị trí file trong mảng mediaList ở trên.
       const mediaTitles = Array.from({ length: mediaList.length }, () => "");
-      // Ví dụ cách điền:
       // mediaTitles[0] = "Lần đầu mình gặp nhau";
       // mediaTitles[2] = "Đoạn video kỷ niệm ở Đà Lạt";
+
+      // ---------- CAPTION RIÊNG CHO TỪNG ẢNH/VIDEO ----------
+      // 👉 Mỗi ảnh/video có caption riêng. Để trống nếu không có caption cho file đó.
+      const mediaCaptions = Array.from({ length: mediaList.length }, () => "");
+      // mediaCaptions[0] = "Khoảnh khắc đầu tiên khi chúng ta gặp nhau";
+      // mediaCaptions[1] = "Cùng nhau dạo phố vào chiều tối";
+      // mediaCaptions[2] = "Video nhạc của riêng mình";
+      // mediaCaptions[3] = "Nơi chúng ta yêu thích nhất";
 
       // ---------- DOM refs ----------
       const loadingScreen = document.getElementById('loadingScreen');
@@ -651,7 +663,8 @@
       const imgElement = document.getElementById('currentImage');
       const videoElement = document.getElementById('currentVideo');
       const titleElement = document.getElementById('imageTitle');
-      const staticCaptionTextEl = document.getElementById('staticCaptionText');
+      const captionElement = document.getElementById('imageCaption');
+      const captionTextEl = document.getElementById('imageCaptionText');
       const bufferingIndicator = document.getElementById('bufferingIndicator');
       const counter = document.getElementById('counter');
       const thumbStrip = document.getElementById('thumbnailStrip');
@@ -670,12 +683,11 @@
       let autoAdvanceTimeout = null;
       let diaryOpened = false;
       let volumeFadeRAF = null;
+      let currentMusicIndex = 0;
+      let captionTypeTimer = null;
+      let wakeLock = null;
 
       // ---------- TẢI DẦN (progressive loading) ----------
-      // Thay vì đợi tải xong TOÀN BỘ ảnh/video rồi mới cho bắt đầu (rất lâu nếu nhiều file),
-      // chỉ cần file đầu tiên sẵn sàng là có thể bấm "MỞ NHẬT KÝ" ngay.
-      // Các file còn lại tiếp tục được tải ngầm phía sau với số lượng tải song song giới hạn,
-      // để không làm nghẽn băng thông và vẫn kịp trước khi slideshow phát tới.
       const PRELOAD_CONCURRENCY = 3;
       const loaded = new Array(totalMedia).fill(false);
       const loading = new Array(totalMedia).fill(false);
@@ -697,7 +709,6 @@
 
       // ---------- KHỞI TẠO ----------
       function init() {
-        // Tải 1 file cụ thể (ảnh hoặc video), báo cho các callback đang chờ khi xong
         function loadSingle(i, onDone) {
           const file = mediaList[i];
           if (isVideoFile(file)) {
@@ -716,7 +727,6 @@
           }
         }
 
-        // Đảm bảo file i đang/đã được tải (dùng khi cần ưu tiên gấp, ví dụ đang phát tới nó)
         function ensureLoading(i) {
           if (loaded[i] || loading[i]) return;
           loading[i] = true;
@@ -733,7 +743,6 @@
           });
         }
 
-        // Bơm hàng đợi: giữ tối đa PRELOAD_CONCURRENCY lượt tải chạy song song, theo đúng thứ tự file
         function pump() {
           while (activeLoads < PRELOAD_CONCURRENCY && nextToQueue < totalMedia) {
             const i = nextToQueue;
@@ -742,18 +751,15 @@
           }
         }
 
-        // Gọi callback khi file i đã sẵn sàng (ngay lập tức nếu đã tải xong)
         function whenReady(i, cb) {
           if (loaded[i]) { cb(); return; }
           ensureLoading(i);
           (loadCallbacks[i] = loadCallbacks[i] || []).push(cb);
         }
-        window.__whenMediaReady = whenReady; // dùng lại trong transitionTo bên dưới
+        window.__whenMediaReady = whenReady;
 
-        // Bắt đầu bơm hàng đợi tải ngầm cho toàn bộ danh sách
         pump();
 
-        // Chỉ cần file đầu tiên sẵn sàng là hiện nút "MỞ NHẬT KÝ" ngay
         whenReady(0, () => {
           setTimeout(() => {
             heartLoader.style.opacity = '0';
@@ -808,7 +814,6 @@
         nextBtn.addEventListener('click', () => { if (!isTransitioning) goTo(currentIndex + 1); });
         playBtn.addEventListener('click', togglePlay);
 
-        // phím tắt (chỉ hoạt động sau khi đã xem đến file cuối, giống như thanh điều khiển)
         document.addEventListener('keydown', (e) => {
           if (!hasReachedEnd) return;
           if (e.target.tagName === 'INPUT') return;
@@ -822,6 +827,28 @@
         container.addEventListener('mouseleave', () => { if (hasReachedEnd && !isPlaying) resumeSlideshow(); });
       }
 
+      // ---------- CHỐNG TẮT MÀN HÌNH ----------
+      function requestWakeLock() {
+        if (!navigator.wakeLock) return; // trình duyệt không support
+        navigator.wakeLock.request('screen')
+          .then(lock => {
+            wakeLock = lock;
+            console.log('Wake Lock activated - màn hình sẽ không tắt');
+            // nếu document bị ẩn, release lock
+            document.addEventListener('visibilitychange', () => {
+              if (document.hidden && wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+              } else if (!document.hidden && !wakeLock) {
+                requestWakeLock();
+              }
+            });
+          })
+          .catch(err => {
+            console.log('Wake Lock request failed:', err);
+          });
+      }
+
       // ---------- MỞ NHẬT KÝ ----------
       function openDiary() {
         if (diaryOpened) return;
@@ -831,29 +858,31 @@
         slideshow.classList.add('show');
 
         bgMusic.volume = normalVolume;
-        bgMusic.play().catch(() => { /* trình duyệt chặn autoplay, bỏ qua im lặng */ });
-
-        typeStaticCaption();
+        requestWakeLock(); // chống tắt màn hình
+        playCurrentMusic();
         transitionTo(0);
       }
 
-      // Hiệu ứng đánh chữ cho caption cố định góc phải dưới, chạy một lần khi mở nhật ký
-      function typeStaticCaption() {
-        if (!staticCaptionText) return;
-        staticCaptionTextEl.textContent = '';
-        staticCaptionTextEl.classList.add('typing-static');
-        let i = 0;
-        const timer = setInterval(() => {
-          i++;
-          staticCaptionTextEl.textContent = staticCaptionText.slice(0, i);
-          if (i >= staticCaptionText.length) {
-            clearInterval(timer);
-            staticCaptionTextEl.classList.remove('typing-static');
-          }
-        }, typingSpeedMs);
+      // ---------- QUẢN LÝ PLAYLIST NHẠC ----------
+      function playCurrentMusic() {
+        if (currentMusicIndex >= musicPlaylist.length) {
+          currentMusicIndex = 0; // quay lại bài đầu nếu hết danh sách
+        }
+        const musicFile = musicPlaylist[currentMusicIndex];
+        bgMusic.src = musicFile;
+        bgMusic.play().catch(() => { /* trình duyệt chặn autoplay */ });
       }
 
-      // ---------- ÂM LƯỢNG NHẠC NỀN (mờ dần) ----------
+      // Khi nhạc kết thúc, chuyển sang bài tiếp theo
+      bgMusic.addEventListener('ended', () => {
+        currentMusicIndex++;
+        if (currentMusicIndex >= musicPlaylist.length) {
+          currentMusicIndex = 0; // quay lại bài đầu
+        }
+        playCurrentMusic();
+      });
+
+      // ---------- ÂM LƯỢNG NHẠC NỀN ----------
       function fadeMusicVolume(target, duration) {
         if (volumeFadeRAF) cancelAnimationFrame(volumeFadeRAF);
         const start = bgMusic.volume;
@@ -883,12 +912,14 @@
         isPlaying = false;
         clearAutoAdvanceTimer();
         if (!videoElement.paused) videoElement.pause();
+        bgMusic.pause();
         updatePlayIcon();
       }
 
       function resumeSlideshow() {
         if (isPlaying) return;
         isPlaying = true;
+        bgMusic.play().catch(() => {});
         const file = mediaList[currentIndex];
         if (isVideoFile(file)) {
           attemptPlayVideo();
@@ -915,14 +946,36 @@
       }
 
       function attemptPlayVideo() {
-        videoElement.muted = false;
-        const p = videoElement.play();
-        if (p && p.catch) {
-          p.catch(() => {
-            // một số trình duyệt chặn phát có tiếng nếu không phải từ thao tác trực tiếp của người dùng
-            videoElement.muted = true;
-            videoElement.play().catch(() => {});
-          });
+        try {
+          videoElement.load(); // reload video trước
+          videoElement.muted = false;
+          
+          // đợi metadata load trước khi play
+          if (videoElement.readyState >= 1) { // metadata đã load
+            const p = videoElement.play();
+            if (p && typeof p.catch === 'function') {
+              p.catch(() => {
+                console.log('Video play failed, trying muted...');
+                videoElement.muted = true;
+                videoElement.play().catch(err => console.log('Muted play also failed:', err));
+              });
+            }
+          } else {
+            // chờ loadedmetadata rồi play
+            const playWhenReady = () => {
+              videoElement.removeEventListener('loadedmetadata', playWhenReady);
+              const p = videoElement.play();
+              if (p && typeof p.catch === 'function') {
+                p.catch(() => {
+                  videoElement.muted = true;
+                  videoElement.play().catch(() => {});
+                });
+              }
+            };
+            videoElement.addEventListener('loadedmetadata', playWhenReady, { once: true });
+          }
+        } catch (e) {
+          console.error('Video play error:', e);
         }
       }
 
@@ -931,7 +984,6 @@
         if (!isTransitioning) goTo(currentIndex + 1);
       }
 
-      // dừng hẳn video hiện tại + khôi phục âm lượng nhạc nền + hủy timer ảnh (dùng khi chuyển file)
       function stopCurrentMedia() {
         if (!videoElement.paused) {
           videoElement.pause();
@@ -985,6 +1037,7 @@
         updateThumbActive(newIndex);
         updateCounter(newIndex);
         updateTitle(newIndex);
+        updateCaption(newIndex);
         checkEndReached(newIndex);
 
         const onFinish = () => {
@@ -1005,7 +1058,7 @@
         counter.textContent = `${index+1} / ${totalMedia}`;
       }
 
-      // Hiệu ứng đánh chữ (typewriter) cho tiêu đề mỗi ảnh/video
+      // Cập nhật tiêu đề (title) có hiệu ứng đánh chữ
       function updateTitle(index) {
         const text = mediaTitles[index] || '';
 
@@ -1033,8 +1086,34 @@
         }, typingSpeedMs);
       }
 
-      // Thanh điều khiển, số thứ tự và thanh thumbnail chỉ hiện ra khi đã xem
-      // đến file cuối cùng, sau đó sẽ luôn hiển thị để có thể tua lại xem từng khoảnh khắc.
+      // Cập nhật caption (caption riêng cho mỗi ảnh/video) có hiệu ứng đánh chữ
+      function updateCaption(index) {
+        const text = mediaCaptions[index] || '';
+
+        if (captionTypeTimer) { clearInterval(captionTypeTimer); captionTypeTimer = null; }
+        captionTextEl.classList.remove('typing');
+        captionTextEl.textContent = '';
+
+        if (!text) {
+          captionElement.classList.remove('show');
+          return;
+        }
+
+        captionElement.classList.add('show');
+        captionTextEl.classList.add('typing');
+
+        let charIndex = 0;
+        captionTypeTimer = setInterval(() => {
+          charIndex++;
+          captionTextEl.textContent = text.slice(0, charIndex);
+          if (charIndex >= text.length) {
+            clearInterval(captionTypeTimer);
+            captionTypeTimer = null;
+            captionTextEl.classList.remove('typing');
+          }
+        }, typingSpeedMs);
+      }
+
       function checkEndReached(index) {
         if (!hasReachedEnd && index === totalMedia - 1) {
           hasReachedEnd = true;
