@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Nhật Ký Của Chúng Mình</title>
+  <style>
+    /* ---------- RESET & BASE ---------- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* ---------- LOADING SCREEN ---------- */
+    #loadingScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      transition: opacity 0.8s ease;
+    }
+    #loadingScreen.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    /* ---------- HEART LOADER ---------- */
+    .heart-loader {
+      position: relative;
+      width: 64px;
+      height: 58px;
+      margin-bottom: 26px;
+      animation: heartBeat 0.9s ease-in-out infinite;
+      filter: drop-shadow(0 0 14px rgba(255, 77, 109, 0.55));
+      transition: opacity 0.4s ease;
+    }
+    .heart-loader::before,
+    .heart-loader::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      width: 32px;
+      height: 52px;
+      background: linear-gradient(135deg, #ff6b8b, #ff2d55);
+      border-radius: 32px 32px 0 0;
+    }
+    .heart-loader::before {
+      left: 32px;
+      transform-origin: 0 100%;
+      transform: rotate(-45deg);
+    }
+    .heart-loader::after {
+      left: 0;
+      transform-origin: 100% 100%;
+      transform: rotate(45deg);
+    }
+    @keyframes heartBeat {
+      0%, 100% { transform: scale(1); }
+      25% { transform: scale(1.12); }
+      45% { transform: scale(0.96); }
+      65% { transform: scale(1.08); }
+    }
+    .progress-bar {
+      width: 200px;
+      height: 3px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+      overflow: hidden;
+      transition: opacity 0.4s ease;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ff6b8b, #ff2d55);
+      border-radius: 4px;
+      transition: width 0.2s;
+    }
+    #loadingText {
+      margin-top: 16px;
+      font-weight: 300;
+      letter-spacing: 1px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      transition: opacity 0.4s ease;
+    }
+    /* ---------- OPEN DIARY BUTTON ---------- */
+    #openDiaryBtn {
+      margin-top: 8px;
+      padding: 15px 40px;
+      border: none;
+      border-radius: 40px;
+      background: linear-gradient(135deg, #ff6b8b, #ff2d55);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(255,45,85,0.45);
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: opacity 0.7s ease, transform 0.7s ease, box-shadow 0.2s ease;
+    }
+    #openDiaryBtn.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    #openDiaryBtn:hover {
+      box-shadow: 0 10px 40px rgba(255,45,85,0.65);
+      transform: translateY(-2px) scale(1.03);
+    }
+    #openDiaryBtn:active {
+      transform: scale(0.96);
+    }
+    /* ---------- SLIDESHOW WRAPPER ---------- */
+    #slideshow {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      opacity: 0;
+      transition: opacity 1.2s ease;
+      will-change: opacity;
+    }
+    #slideshow.show {
+      opacity: 1;
+    }
+    /* ---------- IMAGE CONTAINER ---------- */
+    #imageContainer {
+      position: relative;
+      width: 94vw;
+      max-width: 1400px;
+      height: 80vh;
+      max-height: 80vh;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.03);
+      background: #0a0a0a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #imageContainer img {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 20px;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      will-change: transform, opacity, filter;
+      image-rendering: auto;
+    }
+    /* ---------- IMAGE TITLE / CAPTION (đánh chữ) ---------- */
+    #imageTitle {
+      position: absolute;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      max-width: 90%;
+      padding: 8px 22px;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 40px;
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.3px;
+      text-align: center;
+      color: #f5f5f5;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      z-index: 15;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: clip;
+    }
+    #imageTitle.show {
+      opacity: 1;
+    }
+    #imageTitle.typing::after {
+      content: '|';
+      margin-left: 2px;
+      animation: blinkCursor 0.8s steps(1) infinite;
+    }
+    @keyframes blinkCursor {
+      50% { opacity: 0; }
+    }
+    /* ---------- STATIC CORNER CAPTION (bạn tự viết) ---------- */
+    #staticCaption {
+      position: fixed;
+      bottom: 18px;
+      right: 24px;
+      max-width: 40vw;
+      font-size: 0.85rem;
+      font-style: italic;
+      font-weight: 300;
+      letter-spacing: 0.3px;
+      text-align: right;
+      color: rgba(255,255,255,0.55);
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      z-index: 30;
+      pointer-events: none;
+      line-height: 1.4;
+    }
+    /* ---------- THUMBNAIL STRIP ---------- */
+    #thumbnailStrip {
+      position: relative;
+      width: 94vw;
+      max-width: 1400px;
+      margin-top: 20px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      scroll-behavior: smooth;
+      padding: 8px 4px;
+      display: flex;
+      gap: 10px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      pointer-events: none;
+    }
+    #thumbnailStrip::-webkit-scrollbar {
+      display: none;
+    }
+    /* Thanh thumbnail chỉ hiện ra sau khi đã xem hết toàn bộ ảnh (đến ảnh cuối cùng) */
+    #thumbnailStrip.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .thumb-item {
+      flex: 0 0 auto;
+      width: 70px;
+      height: 50px;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border 0.2s, transform 0.2s, box-shadow 0.2s;
+      background: #1a1a1a;
+      display: inline-block;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .thumb-item.active {
+      border: 2px solid #ff4d6d;
+      box-shadow: 0 0 20px rgba(255,77,109,0.4);
+      transform: scale(1.02);
+    }
+    .thumb-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    /* ---------- COUNTER (ẩn cho đến khi xem xong ảnh cuối) ---------- */
+    #counter {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+      padding: 8px 18px;
+      border-radius: 40px;
+      font-size: 0.95rem;
+      letter-spacing: 0.5px;
+      font-weight: 400;
+      color: #eee;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    #counter.visible {
+      opacity: 1;
+    }
+    /* ---------- GLASS CONTROLS (ẩn cho đến khi xem xong ảnh cuối) ---------- */
+    #controls {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 14px;
+      padding: 12px 24px;
+      background: rgba(20,20,20,0.45);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 60px;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      z-index: 100;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+    #controls.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #controls button {
+      background: rgba(255,255,255,0.04);
+      border: none;
+      color: #eee;
+      font-size: 1.4rem;
+      padding: 8px 14px;
+      border-radius: 40px;
+      backdrop-filter: blur(4px);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 48px;
+      font-weight: 400;
+      letter-spacing: 0.3px;
+      font-size: 1.1rem;
+      backdrop-filter: blur(8px);
+    }
+    #controls button:hover {
+      transform: scale(1.08);
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,77,109,0.35);
+      box-shadow: 0 0 30px rgba(255,77,109,0.15);
+    }
+    #controls button:active {
+      transform: scale(0.94);
+    }
+    /* ---------- PARTICLES CANVAS ---------- */
+    #particlesCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.3;
+    }
+    /* ---------- RESPONSIVE ---------- */
+    @media (max-width: 768px) {
+      #imageContainer {
+        width: 98vw;
+        height: 68vh;
+        border-radius: 16px;
+      }
+      #controls {
+        bottom: 16px;
+        padding: 8px 14px;
+        gap: 8px;
+        border-radius: 40px;
+        width: 96%;
+        max-width: 420px;
+      }
+      #controls button {
+        font-size: 1rem;
+        padding: 6px 10px;
+        min-width: 40px;
+      }
+      .thumb-item {
+        width: 56px;
+        height: 40px;
+      }
+      #counter {
+        font-size: 0.75rem;
+        padding: 4px 12px;
+        top: 12px;
+        right: 14px;
+      }
+      #imageTitle {
+        font-size: 0.85rem;
+        padding: 6px 16px;
+        bottom: 14px;
+      }
+      #staticCaption {
+        font-size: 0.7rem;
+        max-width: 55vw;
+        bottom: 12px;
+        right: 14px;
+      }
+    }
+    @media (max-width: 480px) {
+      #imageContainer {
+        height: 56vh;
+        border-radius: 12px;
+      }
+      #controls button {
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        min-width: 34px;
+      }
+      .thumb-item {
+        width: 44px;
+        height: 34px;
+      }
+    }
+    /* ---------- ANIMATIONS (hiệu ứng chuyển ảnh) ---------- */
+    .anim-fade { animation: fadeAnim 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-zoomIn { animation: zoomIn 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-zoomOut { animation: zoomOut 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-kenBurns { animation: kenBurns 1.8s cubic-bezier(0.42, 0, 0.58, 1) forwards; }
+    .anim-scale { animation: scaleAnim 1.5s ease-in-out forwards; }
+    .anim-slideLeft { animation: slideLeft 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-slideRight { animation: slideRight 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-slideUp { animation: slideUp 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-slideDown { animation: slideDown 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-rotate { animation: rotateAnim 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-blurFade { animation: blurFade 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+    .anim-parallax { animation: parallax 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+    .anim-crossFade { animation: crossFade 1.5s ease-in-out forwards; }
+    .anim-flip { animation: flip 1.6s ease forwards; }
+    .anim-cube { animation: cube 1.6s ease forwards; }
+    .anim-ripple { animation: ripple 1.6s ease forwards; }
+    .anim-dissolve { animation: dissolve 1.6s ease forwards; }
+    /* keyframes */
+    @keyframes fadeAnim { 0% { opacity:0; } 100% { opacity:1; } }
+    @keyframes zoomIn { 0% { transform: scale(1.15); opacity:0; } 100% { transform: scale(1); opacity:1; } }
+    @keyframes zoomOut { 0% { transform: scale(0.85); opacity:0; } 100% { transform: scale(1); opacity:1; } }
+    @keyframes kenBurns { 0% { transform: scale(1.08) translate(0,0); opacity:0.5; } 100% { transform: scale(1) translate(0,0); opacity:1; } }
+    @keyframes scaleAnim { 0% { transform: scale(0.9); opacity:0; } 100% { transform: scale(1); opacity:1; } }
+    @keyframes slideLeft { 0% { transform: translateX(80px); opacity:0; } 100% { transform: translateX(0); opacity:1; } }
+    @keyframes slideRight { 0% { transform: translateX(-80px); opacity:0; } 100% { transform: translateX(0); opacity:1; } }
+    @keyframes slideUp { 0% { transform: translateY(80px); opacity:0; } 100% { transform: translateY(0); opacity:1; } }
+    @keyframes slideDown { 0% { transform: translateY(-80px); opacity:0; } 100% { transform: translateY(0); opacity:1; } }
+    @keyframes rotateAnim { 0% { transform: rotate(-6deg) scale(0.94); opacity:0; } 100% { transform: rotate(0) scale(1); opacity:1; } }
+    @keyframes blurFade { 0% { filter: blur(12px); opacity:0; } 100% { filter: blur(0); opacity:1; } }
+    @keyframes parallax { 0% { transform: scale(1.06) translateY(-10px); opacity:0.4; } 100% { transform: scale(1) translateY(0); opacity:1; } }
+    @keyframes crossFade { 0% { opacity:0; } 50% { opacity:0.4; } 100% { opacity:1; } }
+    @keyframes flip { 0% { transform: perspective(600px) rotateY(90deg); opacity:0; } 100% { transform: perspective(600px) rotateY(0); opacity:1; } }
+    @keyframes cube { 0% { transform: perspective(600px) rotateX(-30deg) rotateY(30deg) scale(0.8); opacity:0; } 100% { transform: perspective(600px) rotateX(0) rotateY(0) scale(1); opacity:1; } }
+    @keyframes ripple { 0% { clip-path: circle(0% at 50% 50%); opacity:0; } 100% { clip-path: circle(100% at 50% 50%); opacity:1; } }
+    @keyframes dissolve { 0% { opacity:0; filter: blur(4px) brightness(1.4); } 100% { opacity:1; filter: blur(0) brightness(1); } }
+  </style>
+</head>
+<body>
+
+  <!-- NHẠC NỀN -->
+  <audio id="bgMusic" src="song.mp3" loop preload="auto"></audio>
+
+  <!-- LOADING -->
+  <div id="loadingScreen">
+    <div class="heart-loader" id="heartLoader"></div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="loadingText">Đang tải kỷ niệm...</div>
+    <button id="openDiaryBtn">MỞ NHẬT KÝ</button>
+  </div>
+
+  <!-- PARTICLES -->
+  <canvas id="particlesCanvas"></canvas>
+
+  <!-- SLIDESHOW -->
+  <div id="slideshow">
+    <div id="imageContainer">
+      <img id="currentImage" src="" alt="slideshow">
+      <div id="imageTitle"></div>
+      <div id="counter">0 / 0</div>
+    </div>
+    <div id="thumbnailStrip"></div>
+  </div>
+
+  <!-- CAPTION GÓC PHẢI BÊN DƯỚI - bạn tự viết nội dung tại đây -->
+  <div id="staticCaption">
+    Viết caption của bạn ở đây
+  </div>
+
+  <!-- CONTROLS (ẩn cho đến khi xem đến ảnh cuối cùng) -->
+  <div id="controls">
+    <button id="prevBtn" aria-label="Previous">◀</button>
+    <button id="playBtn" aria-label="Play/Pause">⏸</button>
+    <button id="nextBtn" aria-label="Next">▶</button>
+  </div>
+
+  <script>
+    (function(){
+      "use strict";
+
+      // ---------- CẤU HÌNH ----------
+      const totalImages = 50;          // 👈 thay đổi số ảnh tại đây
+      const imageExtension = 'jpg';
+      const typingSpeedMs = 45;        // tốc độ đánh chữ của tiêu đề (ms/ký tự)
+
+      // ---------- TIÊU ĐỀ CHO TỪNG ẢNH ----------
+      // 👉 Bạn tự cập nhật tiêu đề/kỷ niệm cho từng ảnh tại đây.
+      // Mảng này có index từ 0, tương ứng ảnh 1.jpg = imageTitles[0], 2.jpg = imageTitles[1], v.v...
+      // Để trống "" nếu ảnh đó chưa muốn có tiêu đề (ô tiêu đề sẽ tự ẩn đi).
+      const imageTitles = Array.from({ length: totalImages }, () => "");
+      // Ví dụ cách điền:
+      // imageTitles[0] = "Lần đầu mình gặp nhau";
+      // imageTitles[1] = "Chuyến đi Đà Lạt";
+      // imageTitles[49] = "Kỷ niệm gần đây nhất";
+
+      // ---------- DOM refs ----------
+      const loadingScreen = document.getElementById('loadingScreen');
+      const heartLoader = document.getElementById('heartLoader');
+      const progressBar = document.getElementById('progressBar');
+      const progressFill = document.getElementById('progressFill');
+      const loadingText = document.getElementById('loadingText');
+      const openDiaryBtn = document.getElementById('openDiaryBtn');
+      const bgMusic = document.getElementById('bgMusic');
+      const slideshow = document.getElementById('slideshow');
+      const imgElement = document.getElementById('currentImage');
+      const titleElement = document.getElementById('imageTitle');
+      const counter = document.getElementById('counter');
+      const thumbStrip = document.getElementById('thumbnailStrip');
+      const controls = document.getElementById('controls');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const playBtn = document.getElementById('playBtn');
+
+      // ---------- STATE ----------
+      let currentIndex = 0;
+      let isPlaying = true;
+      let timer = null;
+      let isTransitioning = false;
+      let imageCache = [];
+      let hasReachedEnd = false; // đã xem đến ảnh cuối cùng chưa
+      let typeTimer = null;      // timer cho hiệu ứng đánh chữ
+      let diaryOpened = false;
+
+      // hiệu ứng có sẵn
+      const effectList = [
+        'anim-fade','anim-zoomIn','anim-zoomOut','anim-kenBurns','anim-scale',
+        'anim-slideLeft','anim-slideRight','anim-slideUp','anim-slideDown',
+        'anim-rotate','anim-blurFade','anim-parallax','anim-crossFade',
+        'anim-flip','anim-cube','anim-ripple','anim-dissolve'
+      ];
+
+      // ---------- KHỞI TẠO ----------
+      function init() {
+        // Tạo danh sách ảnh
+        const imagePaths = [];
+        for (let i = 1; i <= totalImages; i++) {
+          imagePaths.push(`${i}.${imageExtension}`);
+        }
+
+        let loadedCount = 0;
+        const total = imagePaths.length;
+
+        function onImageLoaded() {
+          loadedCount++;
+          const progress = Math.min(100, (loadedCount / total) * 100);
+          progressFill.style.width = progress + '%';
+          loadingText.textContent = `Đang tải kỷ niệm... ${loadedCount}/${total}`;
+
+          if (loadedCount >= total) {
+            // Tất cả ảnh đã tải xong -> ẩn loader, hiện nút "MỞ NHẬT KÝ"
+            setTimeout(() => {
+              heartLoader.style.opacity = '0';
+              progressBar.style.opacity = '0';
+              loadingText.style.opacity = '0';
+              openDiaryBtn.classList.add('show');
+              initParticles();
+            }, 400);
+          }
+        }
+
+        // Tải tất cả ảnh vào cache
+        for (let i = 0; i < total; i++) {
+          const src = imagePaths[i];
+          const img = new Image();
+          img.onload = () => {
+            imageCache[i] = img;
+            onImageLoaded();
+          };
+          img.onerror = () => {
+            imageCache[i] = null;
+            onImageLoaded();
+          };
+          img.src = src;
+        }
+
+        // Tạo thumbnails (sử dụng ảnh đã tải)
+        for (let i = 0; i < total; i++) {
+          const thumbDiv = document.createElement('div');
+          thumbDiv.className = 'thumb-item';
+          thumbDiv.dataset.index = i;
+
+          const thumbImg = document.createElement('img');
+          thumbImg.src = `${i+1}.${imageExtension}`;
+          thumbImg.alt = `Thumb ${i+1}`;
+          thumbImg.loading = 'lazy';
+
+          thumbDiv.appendChild(thumbImg);
+          thumbDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(thumbDiv.dataset.index, 10);
+            if (!isTransitioning && idx !== currentIndex) {
+              goTo(idx);
+            }
+          });
+          thumbStrip.appendChild(thumbDiv);
+        }
+
+        // ----- nút "MỞ NHẬT KÝ" -----
+        openDiaryBtn.addEventListener('click', openDiary);
+
+        // ----- controls -----
+        prevBtn.addEventListener('click', () => { if (!isTransitioning) goTo(currentIndex - 1); });
+        nextBtn.addEventListener('click', () => { if (!isTransitioning) goTo(currentIndex + 1); });
+        playBtn.addEventListener('click', togglePlay);
+
+        // keyboard (chỉ hoạt động sau khi đã xem đến ảnh cuối, giống như thanh điều khiển)
+        document.addEventListener('keydown', (e) => {
+          if (!hasReachedEnd) return;
+          if (e.target.tagName === 'INPUT') return;
+          if (e.key === 'ArrowLeft') { e.preventDefault(); if (!isTransitioning) goTo(currentIndex - 1); }
+          else if (e.key === 'ArrowRight') { e.preventDefault(); if (!isTransitioning) goTo(currentIndex + 1); }
+          else if (e.key === ' ' || e.key === 'Space') { e.preventDefault(); togglePlay(); }
+        });
+
+        // pause on hover (chỉ khi đã hiện thanh điều khiển)
+        const container = document.getElementById('imageContainer');
+        container.addEventListener('mouseenter', () => { if (hasReachedEnd && isPlaying) pauseSlideshow(); });
+        container.addEventListener('mouseleave', () => { if (hasReachedEnd && !isPlaying) resumeSlideshow(); });
+      }
+
+      // ---------- MỞ NHẬT KÝ ----------
+      function openDiary() {
+        if (diaryOpened) return;
+        diaryOpened = true;
+
+        loadingScreen.classList.add('hide');
+        slideshow.classList.add('show');
+
+        // Set ảnh đầu tiên
+        if (imageCache[0]) {
+          imgElement.src = imageCache[0].src;
+        } else {
+          imgElement.src = `1.${imageExtension}`;
+        }
+        updateThumbActive(0);
+        updateCounter(0);
+        updateTitle(0);
+        checkEndReached(0);
+        startSlideshow();
+
+        // Bắt đầu nhạc nền (cần cử chỉ người dùng để trình duyệt cho phép phát)
+        bgMusic.volume = 0.6;
+        bgMusic.play().catch(() => { /* trình duyệt chặn autoplay, bỏ qua im lặng */ });
+      }
+
+      // ---------- ĐIỀU KHIỂN SLIDESHOW ----------
+      function startSlideshow() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(() => {
+          if (isPlaying && !isTransitioning) {
+            goTo(currentIndex + 1);
+          }
+        }, 5000);
+      }
+
+      function togglePlay() {
+        if (isPlaying) pauseSlideshow();
+        else resumeSlideshow();
+        updatePlayIcon();
+      }
+
+      function pauseSlideshow() {
+        isPlaying = false;
+        if (timer) { clearInterval(timer); timer = null; }
+        updatePlayIcon();
+      }
+
+      function resumeSlideshow() {
+        if (isPlaying) return;
+        isPlaying = true;
+        if (!timer) {
+          timer = setInterval(() => {
+            if (isPlaying && !isTransitioning) {
+              goTo(currentIndex + 1);
+            }
+          }, 5000);
+        }
+        updatePlayIcon();
+      }
+
+      function updatePlayIcon() {
+        playBtn.textContent = isPlaying ? '⏸' : '▶';
+      }
+
+      // ---------- CHUYỂN ẢNH ----------
+      function goTo(index) {
+        const total = totalImages;
+        let newIndex = index;
+        if (newIndex < 0) newIndex = total - 1;
+        else if (newIndex >= total) newIndex = 0;
+        if (newIndex === currentIndex) return;
+        if (isTransitioning) return;
+
+        if (!imageCache[newIndex]) {
+          const tryImg = new Image();
+          tryImg.onload = () => {
+            imageCache[newIndex] = tryImg;
+            performTransition(newIndex);
+          };
+          tryImg.onerror = () => {
+            performTransition(newIndex);
+          };
+          tryImg.src = `${newIndex+1}.${imageExtension}`;
+          return;
+        }
+        performTransition(newIndex);
+      }
+
+      function performTransition(newIndex) {
+        isTransitioning = true;
+        currentIndex = newIndex;
+
+        const effect = effectList[Math.floor(Math.random() * effectList.length)];
+
+        const newSrc = imageCache[newIndex] ? imageCache[newIndex].src : `${newIndex+1}.${imageExtension}`;
+        imgElement.src = newSrc;
+
+        imgElement.className = effect;
+
+        updateThumbActive(newIndex);
+        updateCounter(newIndex);
+        updateTitle(newIndex);
+        checkEndReached(newIndex);
+
+        const onFinish = () => {
+          imgElement.className = '';
+          isTransitioning = false;
+        };
+        imgElement.addEventListener('animationend', onFinish, { once: true });
+        setTimeout(() => {
+          if (isTransitioning) {
+            imgElement.className = '';
+            isTransitioning = false;
+          }
+        }, 2000);
+      }
+
+      // ---------- UI UPDATE ----------
+      function updateCounter(index) {
+        counter.textContent = `${index+1} / ${totalImages}`;
+      }
+
+      // Hiệu ứng đánh chữ (typewriter) cho tiêu đề mỗi ảnh
+      function updateTitle(index) {
+        const text = imageTitles[index] || '';
+
+        if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+        titleElement.classList.remove('typing');
+        titleElement.textContent = '';
+
+        if (!text) {
+          titleElement.classList.remove('show');
+          return;
+        }
+
+        titleElement.classList.add('show');
+        titleElement.classList.add('typing');
+
+        let charIndex = 0;
+        typeTimer = setInterval(() => {
+          charIndex++;
+          titleElement.textContent = text.slice(0, charIndex);
+          if (charIndex >= text.length) {
+            clearInterval(typeTimer);
+            typeTimer = null;
+            titleElement.classList.remove('typing');
+          }
+        }, typingSpeedMs);
+      }
+
+      // Thanh điều khiển, số thứ tự ảnh và thanh thumbnail chỉ hiện ra khi đã xem
+      // đến ảnh cuối cùng, sau đó sẽ luôn hiển thị để có thể tua lại xem từng khoảnh khắc.
+      function checkEndReached(index) {
+        if (!hasReachedEnd && index === totalImages - 1) {
+          hasReachedEnd = true;
+          thumbStrip.classList.add('visible');
+          counter.classList.add('visible');
+          controls.classList.add('visible');
+        }
+      }
+
+      function updateThumbActive(index) {
+        const items = thumbStrip.querySelectorAll('.thumb-item');
+        items.forEach((el, i) => {
+          el.classList.toggle('active', i === index);
+        });
+        const active = thumbStrip.querySelector('.thumb-item.active');
+        if (active) {
+          active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+
+      // ---------- PARTICLES ----------
+      function initParticles() {
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+        let w = window.innerWidth, h = window.innerHeight;
+        canvas.width = w; canvas.height = h;
+        const particles = [];
+        const count = Math.min(80, Math.floor((w * h) / 15000));
+        for (let i = 0; i < count; i++) {
+          particles.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: Math.random() * 1.6 + 0.5,
+            dx: (Math.random() - 0.5) * 0.35,
+            dy: (Math.random() - 0.5) * 0.35,
+          });
+        }
+        function draw() {
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          for (let p of particles) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+            p.x += p.dx;
+            p.y += p.dy;
+            if (p.x < 0 || p.x > w) p.dx *= -1;
+            if (p.y < 0 || p.y > h) p.dy *= -1;
+          }
+          requestAnimationFrame(draw);
+        }
+        draw();
+        window.addEventListener('resize', () => {
+          w = window.innerWidth; h = window.innerHeight;
+          canvas.width = w; canvas.height = h;
+        });
+      }
+
+      // ---------- KHỞI CHẠY ----------
+      document.addEventListener('DOMContentLoaded', init);
+    })();
+  </script>
+</body>
+</html>
