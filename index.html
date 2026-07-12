@@ -170,6 +170,31 @@
       will-change: transform, opacity, filter;
       display: none;
     }
+    /* ---------- BUFFERING INDICATOR (khi phát tới file chưa tải xong) ---------- */
+    #bufferingIndicator {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 25;
+    }
+    #bufferingIndicator.show {
+      opacity: 1;
+    }
+    #bufferingIndicator .buffer-spinner {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top: 3px solid #ff4d6d;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     /* ---------- IMAGE TITLE / CAPTION (đánh chữ) ---------- */
     #imageTitle {
       position: absolute;
@@ -500,6 +525,7 @@
       <video id="currentVideo" playsinline webkit-playsinline></video>
       <div id="imageTitle"></div>
       <div id="counter">0 / 0</div>
+      <div id="bufferingIndicator"><div class="buffer-spinner"></div></div>
     </div>
     <div id="thumbnailStrip"></div>
   </div>
@@ -626,6 +652,7 @@
       const videoElement = document.getElementById('currentVideo');
       const titleElement = document.getElementById('imageTitle');
       const staticCaptionTextEl = document.getElementById('staticCaptionText');
+      const bufferingIndicator = document.getElementById('bufferingIndicator');
       const counter = document.getElementById('counter');
       const thumbStrip = document.getElementById('thumbnailStrip');
       const controls = document.getElementById('controls');
@@ -644,6 +671,18 @@
       let diaryOpened = false;
       let volumeFadeRAF = null;
 
+      // ---------- TẢI DẦN (progressive loading) ----------
+      // Thay vì đợi tải xong TOÀN BỘ ảnh/video rồi mới cho bắt đầu (rất lâu nếu nhiều file),
+      // chỉ cần file đầu tiên sẵn sàng là có thể bấm "MỞ NHẬT KÝ" ngay.
+      // Các file còn lại tiếp tục được tải ngầm phía sau với số lượng tải song song giới hạn,
+      // để không làm nghẽn băng thông và vẫn kịp trước khi slideshow phát tới.
+      const PRELOAD_CONCURRENCY = 3;
+      const loaded = new Array(totalMedia).fill(false);
+      const loading = new Array(totalMedia).fill(false);
+      const loadCallbacks = {};
+      let activeLoads = 0;
+      let nextToQueue = 0;
+
       const effectList = [
         'anim-fade','anim-zoomIn','anim-zoomOut','anim-kenBurns','anim-scale',
         'anim-slideLeft','anim-slideRight','anim-slideUp','anim-slideDown',
@@ -658,41 +697,71 @@
 
       // ---------- KHỞI TẠO ----------
       function init() {
-        let loadedCount = 0;
-
-        function onMediaLoaded() {
-          loadedCount++;
-          const progress = Math.min(100, (loadedCount / totalMedia) * 100);
-          progressFill.style.width = progress + '%';
-          loadingText.textContent = `Đang tải kỷ niệm... ${loadedCount}/${totalMedia}`;
-
-          if (loadedCount >= totalMedia) {
-            setTimeout(() => {
-              heartLoader.style.opacity = '0';
-              progressBar.style.opacity = '0';
-              loadingText.style.opacity = '0';
-              openDiaryBtn.classList.add('show');
-              initParticles();
-            }, 400);
-          }
-        }
-
-        // Tải trước tất cả ảnh + video
-        mediaList.forEach((file) => {
+        // Tải 1 file cụ thể (ảnh hoặc video), báo cho các callback đang chờ khi xong
+        function loadSingle(i, onDone) {
+          const file = mediaList[i];
           if (isVideoFile(file)) {
             const v = document.createElement('video');
             v.preload = 'auto';
             v.muted = true;
             v.src = file;
-            v.addEventListener('loadeddata', onMediaLoaded, { once: true });
-            v.addEventListener('error', onMediaLoaded, { once: true });
+            v.addEventListener('loadeddata', onDone, { once: true });
+            v.addEventListener('error', onDone, { once: true });
             v.load();
           } else {
             const img = new Image();
-            img.onload = onMediaLoaded;
-            img.onerror = onMediaLoaded;
+            img.onload = onDone;
+            img.onerror = onDone;
             img.src = file;
           }
+        }
+
+        // Đảm bảo file i đang/đã được tải (dùng khi cần ưu tiên gấp, ví dụ đang phát tới nó)
+        function ensureLoading(i) {
+          if (loaded[i] || loading[i]) return;
+          loading[i] = true;
+          activeLoads++;
+          loadSingle(i, () => {
+            loaded[i] = true;
+            loading[i] = false;
+            activeLoads--;
+            if (loadCallbacks[i]) {
+              loadCallbacks[i].forEach((cb) => cb());
+              delete loadCallbacks[i];
+            }
+            pump();
+          });
+        }
+
+        // Bơm hàng đợi: giữ tối đa PRELOAD_CONCURRENCY lượt tải chạy song song, theo đúng thứ tự file
+        function pump() {
+          while (activeLoads < PRELOAD_CONCURRENCY && nextToQueue < totalMedia) {
+            const i = nextToQueue;
+            nextToQueue++;
+            ensureLoading(i);
+          }
+        }
+
+        // Gọi callback khi file i đã sẵn sàng (ngay lập tức nếu đã tải xong)
+        function whenReady(i, cb) {
+          if (loaded[i]) { cb(); return; }
+          ensureLoading(i);
+          (loadCallbacks[i] = loadCallbacks[i] || []).push(cb);
+        }
+        window.__whenMediaReady = whenReady; // dùng lại trong transitionTo bên dưới
+
+        // Bắt đầu bơm hàng đợi tải ngầm cho toàn bộ danh sách
+        pump();
+
+        // Chỉ cần file đầu tiên sẵn sàng là hiện nút "MỞ NHẬT KÝ" ngay
+        whenReady(0, () => {
+          setTimeout(() => {
+            heartLoader.style.opacity = '0';
+            progressBar.style.opacity = '0';
+            loadingText.style.opacity = '0';
+            openDiaryBtn.classList.add('show');
+            initParticles();
+          }, 300);
         });
 
         // Tạo thumbnails
