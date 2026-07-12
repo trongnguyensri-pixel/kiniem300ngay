@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Nhật Ký Của Chúng Mình</title>
+  <title>KỈ NIỆM 300 NGÀY</title>
   <style>
     /* ---------- RESET & BASE ---------- */
     * {
@@ -533,7 +533,7 @@
   <div id="slideshow">
     <div id="imageContainer">
       <img id="currentImage" alt="slideshow">
-      <video id="currentVideo" playsinline webkit-playsinline></video>
+      <video id="currentVideo" playsinline webkit-playsinline muted></video>
       <div id="imageTitle"></div>
       <div id="counter">0 / 0</div>
       <div id="bufferingIndicator"><div class="buffer-spinner"></div></div>
@@ -639,13 +639,11 @@
 
       const imageDurationMs = 7000;
       const typingSpeedMs = 45;
-      const duckedVolume = 0.4;
       const normalVolume = 1.0;
-      const volumeFadeMs = 400;
 
       // ---------- TIÊU ĐỀ CHO TỪNG FILE ----------
       const mediaTitles = Array.from({ length: mediaList.length }, () => "");
-      mediaTitles[0] = "Câu chuyện tình yêu của toiii";
+      mediaTitles[0] = "KỈ NIỆM 300 NGÀY BÊN NHAU";
       mediaTitles[1] = "Vào 1 ngày nào đó";
       mediaTitles[2] = "Khúc nài không biết nói gì nữa";
        mediaTitles[3] = "Tôi bắt đầu tìm cách";
@@ -779,16 +777,16 @@ mediaCaptions[61] = "";
 mediaCaptions[62] = "";
 mediaCaptions[63] = "";
 mediaCaptions[64] = "Yêu emmm <3";
-      // ---------- NHỮNG VIDEO KHÔNG TẮT NHẠC ----------
-      // 👉 Liệt kê tên file video mà muốn nhạc nền vẫn tiếp tục phát
-      // (thay vì dừng hẳn khi video chạy)
+      
+      // ---------- NHỮNG VIDEO ĐƯỢC PHÉP PHÁT NHẠC NỀN ----------
+      // 👉 Danh sách các video được GIỮ nhạc nền khi phát
+      // Video KHÔNG trong danh sách này sẽ TẮT nhạc khi phát
       const keepMusicVideos = [
         "3.mp4",
-"5.mp4",
-"6.mp4",
-"9.mp4",
-"12.mp4",
-
+        "5.mp4",
+        "6.mp4",
+        "9.mp4",
+        "12.mp4",
       ];
 
       function shouldKeepMusicForVideo(filename) {
@@ -1013,7 +1011,9 @@ mediaCaptions[64] = "Yêu emmm <3";
         }
         const musicFile = musicPlaylist[currentMusicIndex];
         bgMusic.src = musicFile;
-        bgMusic.play().catch(() => { /* trình duyệt chặn autoplay */ });
+        bgMusic.play().catch(() => {
+          console.log('Autoplay music blocked by browser - user must interact first');
+        });
       }
 
       // Khi nhạc kết thúc, chuyển sang bài tiếp theo
@@ -1038,15 +1038,6 @@ mediaCaptions[64] = "Yêu emmm <3";
         }
       }
 
-      // Mờ dần âm lượng nhạc (không dùng nữa - sử dụng pause/resume thay vì)
-      // function fadeMusicVolume(target, duration) {
-      //   ...
-      // }
-      // function duckMusic() { fadeMusicVolume(duckedVolume, volumeFadeMs); }
-      // function restoreMusic() { fadeMusicVolume(normalVolume, volumeFadeMs); }
-
-
-
       // ---------- PHÁT / TẠM DỪNG ----------
       function togglePlay() {
         if (isPlaying) pauseSlideshow();
@@ -1058,7 +1049,7 @@ mediaCaptions[64] = "Yêu emmm <3";
         isPlaying = false;
         clearAutoAdvanceTimer();
         if (!videoElement.paused) videoElement.pause();
-        pauseMusic(); // dừng nhạc khi tạm dừng slideshow
+        pauseMusic(); // tắt nhạc khi tạm dừng slideshow
         updatePlayIcon();
       }
 
@@ -1094,16 +1085,14 @@ mediaCaptions[64] = "Yêu emmm <3";
       function attemptPlayVideo() {
         try {
           videoElement.load(); // reload video trước
-          videoElement.muted = false;
+          videoElement.muted = true; // luôn muted để tránh autoplay policy
           
           // đợi metadata load trước khi play
           if (videoElement.readyState >= 1) { // metadata đã load
             const p = videoElement.play();
             if (p && typeof p.catch === 'function') {
               p.catch(() => {
-                console.log('Video play failed, trying muted...');
-                videoElement.muted = true;
-                videoElement.play().catch(err => console.log('Muted play also failed:', err));
+                console.log('Video play failed');
               });
             }
           } else {
@@ -1113,8 +1102,7 @@ mediaCaptions[64] = "Yêu emmm <3";
               const p = videoElement.play();
               if (p && typeof p.catch === 'function') {
                 p.catch(() => {
-                  videoElement.muted = true;
-                  videoElement.play().catch(() => {});
+                  console.log('Muted play also failed');
                 });
               }
             };
@@ -1126,14 +1114,6 @@ mediaCaptions[64] = "Yêu emmm <3";
       }
 
       function handleVideoEnded() {
-        // Lấy tên file video từ src
-        const videoSrc = videoElement.src;
-        const videoFilename = videoSrc ? videoSrc.split('/').pop() : '';
-        
-        // Chỉ resume nhạc nếu: slideshow đang phát + video vừa mới kết thúc là video TẮT nhạc
-        if (isPlaying && videoFilename && !shouldKeepMusicForVideo(videoFilename)) {
-          resumeMusic();
-        }
         if (!isTransitioning) goTo(currentIndex + 1);
       }
 
@@ -1149,17 +1129,6 @@ mediaCaptions[64] = "Yêu emmm <3";
         videoElement.removeEventListener('waiting', null);
         
         bufferingIndicator.classList.remove('show');
-        
-        // Lấy tên file video cũ từ src hiện tại
-        const currentVideoSrc = videoElement.src;
-        if (currentVideoSrc && isPlaying) {
-          // Chỉ resume nhạc nếu: slideshow đang phát + video vừa mới dừng là video TẮT nhạc
-          const videoFilename = currentVideoSrc.split('/').pop();
-          if (!shouldKeepMusicForVideo(videoFilename)) {
-            resumeMusic();
-          }
-        }
-        
         clearAutoAdvanceTimer();
       }
 
@@ -1185,6 +1154,7 @@ mediaCaptions[64] = "Yêu emmm <3";
         let activeEl;
 
         if (type === 'image') {
+          // ============ HIỂN THỊ ẢNH ============
           videoElement.style.display = 'none';
           videoElement.removeAttribute('src');
           videoElement.pause();
@@ -1192,8 +1162,15 @@ mediaCaptions[64] = "Yêu emmm <3";
           imgElement.src = file;
           imgElement.className = effect;
           activeEl = imgElement;
+          
+          // 🎵 PHÁT NHẠC NỀN KHI HIỂN THỊ ẢNH
+          if (isPlaying) {
+            resumeMusic();
+          }
+          
           scheduleNextForImage();
         } else {
+          // ============ HIỂN THỊ VIDEO ============
           imgElement.style.display = 'none';
           
           // Setup video attributes
@@ -1214,9 +1191,15 @@ mediaCaptions[64] = "Yêu emmm <3";
           
           activeEl = videoElement;
           
-          // Chỉ tắt nhạc nếu video này KHÔNG nằm trong danh sách giữ nhạc
+          // 🎵 KIỂM TRA XEM VIDEO NÀY CÓ CHO PHÉP PHÁT NHẠC NỀN KHÔNG
           if (!shouldKeepMusicForVideo(file)) {
+            // VIDEO TẮT NHẠC: Tắt nhạc
             pauseMusic();
+          } else {
+            // VIDEO GIỮ NHẠC: Tiếp tục phát nhạc
+            if (isPlaying) {
+              resumeMusic();
+            }
           }
           
           // Thêm error handler
